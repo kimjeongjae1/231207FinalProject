@@ -1,0 +1,222 @@
+팔로우 캠 스크립트
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+public class CamController : MonoBehaviour
+{
+    public GameObject player;
+    private Vector3 offset;
+    // Start is called before the first frame update
+    void Start()
+    {
+        offset = transform.position - player.transform.position;
+    }
+    // Update is called once per frame
+    void LateUpdate()
+    {
+        transform.position = player.transform.position + offset;
+    }
+}
+
+---------------------------------------------------------------------
+
+플레이어와 충돌하면, n초 뒤 발판을 삭제하고 파티클 생성
+
+using UnityEngine;
+
+public class Clocking : MonoBehaviour
+{
+    public GameObject particleEffectPrefab; 
+    public float particleEffectDuration = 2f; // 파티클 지속 시간
+
+    private bool isPlayerOnPlatform = false;
+
+    void Update()
+    {
+        if (isPlayerOnPlatform)
+        {
+            // 0.5초 후에 발판을 비활성화 및 파티클 효과 재생
+            Invoke("DisappearWithParticleEffect", 0.5f);
+        }
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            isPlayerOnPlatform = true;
+        }
+    }
+
+    private void OnCollisionExit(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            isPlayerOnPlatform = false;
+        }
+    }
+
+    private void DisappearWithParticleEffect()
+    {
+        
+        if (particleEffectPrefab != null)
+        {
+            GameObject particleEffect = Instantiate(particleEffectPrefab, transform.position, Quaternion.identity);
+
+            // 파티클 지속 시간
+            Destroy(particleEffect, particleEffectDuration);
+        }
+
+        // 발판을 비활성화
+        gameObject.SetActive(false);
+    }
+}
+
+---------------------------------------------------------------------
+
+라이트 색을 일정시간 간격으로 계속 바꿔주는 스크립트
+
+using UnityEngine;
+
+public class LightColorController : MonoBehaviour
+{
+    public float colorChangeInterval = 2f; // 변경 간격 (초)
+    private Light directionalLight;
+    private float timeSinceLastChange = 0f;
+
+    void Start()
+    {
+        directionalLight = GetComponent<Light>();
+        if (directionalLight == null)
+        {
+            Debug.LogError("Directional Light 컴포넌트를 찾을 수 없습니다.");
+        }
+    }
+
+    void Update()
+    {
+       
+        timeSinceLastChange += Time.deltaTime;
+        if (timeSinceLastChange >= colorChangeInterval)
+        {
+            ChangeLightColor();
+            timeSinceLastChange = 0f;
+        }
+    }
+
+    void ChangeLightColor()
+    {
+        
+        Color newColor = new Color(Random.value, Random.value, Random.value);
+        directionalLight.color = newColor;
+    }
+}
+
+
+------------------------------------------------------------------------
+
+플레이어 이동(대각선 포함) 및 Goal 
+
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+
+public class PlayerController : MonoBehaviour
+{
+    public float defaultMoveSpeed = 5f;
+    public float sprintMultiplier = 2f;
+    public float jumpForce = 10f;
+    private bool isGrounded;
+    private bool hasReachedGoal = false;
+
+    private AudioSource audioSource;
+    public AudioClip jumpSound;
+    public AudioClip goalSound; // Goal에 도달할 때 재생할 소리
+
+    public GameObject goalUI;
+    
+
+    void Start()
+    {
+        audioSource = GetComponent<AudioSource>();
+        goalUI.SetActive(false);
+    }
+
+    void Update()
+    {
+        if (!hasReachedGoal)
+        {
+            Move();
+
+            if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
+            {
+                Jump();
+            }
+        }
+    }
+
+    void Move()
+    {
+        float horizontal = Input.GetAxis("Horizontal");
+        float vertical = Input.GetAxis("Vertical");
+
+        // 입력 방향 벡터 정규화
+        Vector3 inputDir = new Vector3(horizontal, 0f, vertical).normalized;
+
+        float currentMoveSpeed = Input.GetKey(KeyCode.LeftShift) ? defaultMoveSpeed * sprintMultiplier : defaultMoveSpeed;
+
+        // 대각선 이동
+        Vector3 movement = inputDir * currentMoveSpeed * Time.deltaTime;
+        transform.Translate(movement);
+
+        CheckGrounded();
+    }
+
+    void Jump()
+    {
+        GetComponent<Rigidbody>().AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+
+        if (jumpSound != null)
+        {
+            audioSource.PlayOneShot(jumpSound);
+        }
+    }
+
+    void CheckGrounded()
+    {
+        RaycastHit hit;
+        float rayLength = 1f;
+
+        if (Physics.Raycast(transform.position, Vector3.down, out hit, rayLength))
+        {
+            isGrounded = true;
+        }
+        else
+        {
+            isGrounded = false;
+        }
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Dead"))
+        {
+            
+            Scene currentScene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(currentScene.name);
+        }
+        else if (other.CompareTag("Goal"))
+        {
+            hasReachedGoal = true;
+            goalUI.SetActive(true);
+            
+
+            // Goal에 도달할 때 소리 재생
+            if (goalSound != null)
+            {
+                audioSource.PlayOneShot(goalSound);
+            }
+        }
+    }
+}
